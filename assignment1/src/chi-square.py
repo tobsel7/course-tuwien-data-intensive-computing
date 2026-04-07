@@ -1,12 +1,9 @@
 import sys
 import json
 import heapq
-from collections import defaultdict
 
 def calculate_chi_square():
-    # 1. First Pass: Get category totals
-    # We read the file once to get the totals. On a cluster, 
-    # reading from a file is better than a pipe if the file is large.
+    # 1. Get category totals
     input_file = sys.argv[1]
 
     cat_totals = {}
@@ -20,10 +17,9 @@ def calculate_chi_square():
     total_n = sum(cat_totals.values())
     all_categories = sorted(cat_totals.keys())
     
-    # Heaps to store only the top 75 results per category (very memory efficient)
     top_heaps = {cat: [] for cat in all_categories}
     
-    # 2. Second Pass: Process terms one by one
+    # 2. Process terms in loop
     current_term = None
     term_cat_counts = {}
 
@@ -41,13 +37,11 @@ def calculate_chi_square():
                     # Calculate Chi-Square for the finished term
                     process_term(current_term, term_cat_counts, cat_totals, total_n, top_heaps)
                 
-                # Reset for new term
                 current_term = term
                 term_cat_counts = {}
             
             term_cat_counts[cat] = count
 
-        # Process the very last term
         if current_term:
             process_term(current_term, term_cat_counts, cat_totals, total_n, top_heaps)
 
