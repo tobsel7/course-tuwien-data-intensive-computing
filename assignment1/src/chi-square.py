@@ -3,7 +3,27 @@ import json
 import heapq
 
 def calculate_chi_square():
-    # 1. Get category totals
+    """
+    Calculates Chi-Square scores for each term in each category.
+
+    Input:
+        <(term, category), document_frequency>
+        <("__TOTAL__", category), category_total>
+
+    Processing:
+        1. Read category totals.
+        2. Group counts by term.
+        3. Calculate Chi-Square scores.
+        4. Keep top 75 terms per category.
+
+    Output:
+        category term1:score1 term2:score2 ... term75:score75
+        final line: all selected terms
+    """
+
+    # 1. Get category totals.
+    #
+    # These totals are needed for the Chi-Square contingency table.
     input_file = sys.argv[1]
 
     cat_totals = {}
@@ -16,10 +36,14 @@ def calculate_chi_square():
 
     total_n = sum(cat_totals.values())
     all_categories = sorted(cat_totals.keys())
-    
+
+    # One small heap per category. Each heap stores only the current best 75 terms.
     top_heaps = {cat: [] for cat in all_categories}
     
     # 2. Process terms in loop
+    #
+    # The input is expected to be sorted by term as MRJob output usually is.
+    # Because of that, we can process one term at a time instead of loading all terms into memory.
     current_term = None
     term_cat_counts = {}
 
@@ -34,6 +58,7 @@ def calculate_chi_square():
 
             if term != current_term:
                 if current_term is not None:
+
                     # Calculate Chi-Square for the finished term
                     process_term(current_term, term_cat_counts, cat_totals, total_n, top_heaps)
                 
@@ -45,7 +70,10 @@ def calculate_chi_square():
         if current_term:
             process_term(current_term, term_cat_counts, cat_totals, total_n, top_heaps)
 
-    # 3. Output Formatting
+    # 3. Output Formatting.
+    #
+    # Print top terms for each category.
+    # Additionally collect all selected terms into one vocabulary line at the end.
     all_top_terms = set()
     for cat in all_categories:
         top_75 = heapq.nlargest(75, top_heaps[cat])
@@ -58,8 +86,32 @@ def calculate_chi_square():
     print(" ".join(sorted(list(all_top_terms))))
 
 def process_term(term, counts, cat_totals, n, top_heaps):
+    """
+    Calculates Chi-Square score of one term against every category.
+
+    counts contains only categories where the term appeared.
+    Missing categories are treated as zero.
+
+    Input:
+        term: current term
+        counts: category counts for this term
+        cat_totals: total reviews per category
+        n: total number of reviews
+        top_heaps: top terms per category
+
+    Output:
+        Updates top_heaps in place.
+    """
+
     total_term_freq = sum(counts.values())
     for cat, n_cat in cat_totals.items():
+
+        # 2x2 table for this term and this category:
+        #
+        # a: reviews in this category that contain the term
+        # b: reviews outside this category that contain the term
+        # c: reviews in this category that do not contain the term
+        # d: reviews outside this category that do not contain the term
         a = counts.get(cat, 0)
         b = total_term_freq - a
         c = n_cat - a
@@ -69,7 +121,7 @@ def process_term(term, counts, cat_totals, n, top_heaps):
         den = (a + b) * (c + d) * (a + c) * (b + d)
         chi = num / den if den != 0 else 0
         
-        # Keep only top 75 in the heap to save memory
+        # Keep only top 75 in the heap.
         if len(top_heaps[cat]) < 75:
             heapq.heappush(top_heaps[cat], (chi, term))
         else:
