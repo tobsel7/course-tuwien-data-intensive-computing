@@ -18,8 +18,6 @@
 # Step 3:
 #   The final Hadoop output is merged from HDFS into:
 #       result/dev_output.txt
-#
-# Temporary HDFS output directories are removed before and after the run.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
