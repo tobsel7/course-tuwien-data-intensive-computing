@@ -1,0 +1,35 @@
+Best Model Parameters
+=====================
+numTopFeatures: 2000
+regParam: 0.01
+standardization: True
+maxIter: 100
+Validation F1: 0.662927
+Test F1: 0.660037
+
+All Results
+===========
+Features=2000, regParam=0.01, standardization=True, maxIter=100, Validation F1=0.662927
+Features=2000, regParam=0.01, standardization=True, maxIter=50, Validation F1=0.662912
+Features=2000, regParam=0.1, standardization=True, maxIter=50, Validation F1=0.656877
+Features=2000, regParam=0.1, standardization=True, maxIter=100, Validation F1=0.655826
+Features=2000, regParam=1.0, standardization=True, maxIter=50, Validation F1=0.620180
+Features=2000, regParam=1.0, standardization=True, maxIter=100, Validation F1=0.619941
+Features=500, regParam=0.01, standardization=True, maxIter=50, Validation F1=0.556070
+Features=2000, regParam=0.01, standardization=False, maxIter=50, Validation F1=0.556015
+Features=2000, regParam=0.01, standardization=False, maxIter=100, Validation F1=0.555742
+Features=2000, regParam=1.0, standardization=False, maxIter=50, Validation F1=0.555033
+Features=500, regParam=0.01, standardization=True, maxIter=100, Validation F1=0.554285
+Features=2000, regParam=0.1, standardization=False, maxIter=50, Validation F1=0.554088
+Features=2000, regParam=0.1, standardization=False, maxIter=100, Validation F1=0.553365
+Features=2000, regParam=1.0, standardization=False, maxIter=100, Validation F1=0.552659
+Features=500, regParam=0.1, standardization=True, maxIter=50, Validation F1=0.539128
+Features=500, regParam=0.1, standardization=True, maxIter=100, Validation F1=0.534969
+Features=500, regParam=1.0, standardization=True, maxIter=50, Validation F1=0.498567
+Features=500, regParam=1.0, standardization=True, maxIter=100, Validation F1=0.497026
+Features=500, regParam=0.01, standardization=False, maxIter=50, Validation F1=0.475029
+Features=500, regParam=0.01, standardization=False, maxIter=100, Validation F1=0.474664
+Features=500, regParam=0.1, standardization=False, maxIter=100, Validation F1=0.473697
+Features=500, regParam=0.1, standardization=False, maxIter=50, Validation F1=0.472906
+Features=500, regParam=1.0, standardization=False, maxIter=50, Validation F1=0.472261
+Features=500, regParam=1.0, standardization=False, maxIter=100, Validation F1=0.471568
