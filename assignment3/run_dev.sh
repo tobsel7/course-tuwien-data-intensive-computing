@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Assignment 3 Deployment Script for MiniStack
 # This script provisions all AWS resources and runs integration tests
@@ -190,28 +190,35 @@ deploy_lambda() {
     fi
 
     # Create zip file
+    rm -f lambda.zip
     if [ -d "package" ]; then
-        # Include both handler and dependencies
-        zip -r lambda.zip handler.py > /dev/null 2>&1 || true
-        cd package
-        zip -r ../lambda.zip . > /dev/null 2>&1 || true
-        cd ..
+        # Include both handler and dependencies at the zip root
+        zip -q lambda.zip handler.py
+        if [ -n "$(find package -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+            (cd package && zip -qr ../lambda.zip .)
+        fi
     else
         # Just the handler
-        zip lambda.zip handler.py > /dev/null 2>&1 || true
+        zip -q lambda.zip handler.py
     fi
 
     # Check if function exists
+    ENV_VARS=$(cat <<EOF
+{"Variables":{"STAGE":"local","S3_ENDPOINT_URL":"${S3_ENDPOINT_URL}","DYNAMODB_ENDPOINT_URL":"${DYNAMODB_ENDPOINT_URL}","SSM_ENDPOINT_URL":"${SSM_ENDPOINT_URL}"}}
+EOF
+)
+
     if aws --endpoint-url="${MINISTACK_ENDPOINT}" lambda get-function --function-name "${function_name}" 2>/dev/null | grep -q "FunctionName"; then
         echo "Updating Lambda function: ${function_name}..."
         aws --endpoint-url="${MINISTACK_ENDPOINT}" lambda update-function-code \
             --function-name "${function_name}" \
             --zip-file "fileb://lambda.zip"
+        aws --endpoint-url="${MINISTACK_ENDPOINT}" lambda update-function-configuration \
+            --function-name "${function_name}" \
+            --environment "${ENV_VARS}" \
+            --timeout "${LAMBDA_TIMEOUT}"
     else
         echo "Creating Lambda function: ${function_name}..."
-
-        # Build environment variables JSON
-        ENV_VARS="{\"STAGE\":\"local\",\"S3_ENDPOINT_URL\":\"${S3_ENDPOINT_URL}\",\"DYNAMODB_ENDPOINT_URL\":\"${DYNAMODB_ENDPOINT_URL}\",\"SSM_ENDPOINT_URL\":\"${SSM_ENDPOINT_URL}\"}"
 
         aws --endpoint-url="${MINISTACK_ENDPOINT}" lambda create-function \
             --function-name "${function_name}" \
@@ -220,7 +227,7 @@ deploy_lambda() {
             --runtime "${LAMBDA_RUNTIME}" \
             --timeout "${LAMBDA_TIMEOUT}" \
             --role "${LAMBDA_ROLE}" \
-            --environment "Variables=${ENV_VARS}"
+            --environment "${ENV_VARS}"
     fi
 
     echo "✓ Deployed Lambda: ${function_name}"
