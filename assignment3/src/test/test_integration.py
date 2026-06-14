@@ -85,13 +85,21 @@ def test_whole_flow():
             'summary': 'Bad',
             'reviewText': 'damn, bad',
         },
+        {
+            'reviewerID': user_id,
+            'reviewerName': 'Test User',
+            'asin': 'B001234570',
+            'overall': 1,
+            'summary': 'Bad',
+            'reviewText': 'damn, bad',
+        },
     ]
 
     payload = '\n'.join(json.dumps(review) for review in reviews)
 
     s3_client.put_object(
         Bucket=input_bucket,
-        Key='reviews/test_user_1_batch.jsonl',
+        Key='reviews/test_user_1_batch.json',
         Body=payload,
     )
 

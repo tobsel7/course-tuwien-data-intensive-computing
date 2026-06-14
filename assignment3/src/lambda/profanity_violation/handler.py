@@ -16,7 +16,7 @@ dynamodb = boto3.resource("dynamodb", endpoint_url=endpoint)
 ssm = boto3.client("ssm", endpoint_url=endpoint)
 s3 = boto3.client("s3", endpoint_url=endpoint)
 
-USER_BAN_THRESHOLD = 3
+USER_BAN_THRESHOLD = 4
 
 def handler(event, context):
     user_table = ssm.get_parameter(Name="/tables/users")["Parameter"]["Value"]
