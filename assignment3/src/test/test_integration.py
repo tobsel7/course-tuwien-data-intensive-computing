@@ -39,7 +39,7 @@ def wait_for_lambda(function_name, timeout=30):
     waiter.wait(FunctionName=function_name)
 
 
-def test_reviews_devset_user_exists():
+def test_reviews_devset():
     """Smoke test: upload devset fixture. On the cluster one can verify the log output."""
     input_bucket = get_ssm_parameter('/buckets/input')
 
@@ -118,5 +118,5 @@ if __name__ == '__main__':
     wait_for_lambda('profanity_check')
     wait_for_lambda('profanity_violation')
     test_whole_flow()
-    test_reviews_devset_user_exists()
+    test_reviews_devset()
     print("Test completed.")
