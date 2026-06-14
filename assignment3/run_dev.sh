@@ -11,9 +11,9 @@ AWS_REGION="us-east-1"
 AWS_ACCOUNT_ID="000000000000"
 
 # Resource names
-INPUT_BUCKET="assignment3-input-reviews"
-PROCESSED_BUCKET="assignment3-processed-text"
-VIOLATIONS_BUCKET="assignment3-profanity-violations"
+INPUT_BUCKET="input-reviews"
+PROCESSED_BUCKET="processed-text"
+VIOLATIONS_BUCKET="profanity-violations"
 REVIEWS_TABLE="reviews"
 USERS_TABLE="users"
 PROFANITY_TABLE="profanity"

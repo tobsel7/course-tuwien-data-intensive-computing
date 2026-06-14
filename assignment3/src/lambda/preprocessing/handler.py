@@ -1,25 +1,19 @@
-"""Simple preprocessing Lambda.
-Reads a review JSON from S3, creates a minimal processed text string,
-writes it to a processed bucket and records entries in DynamoDB.
-"""
-
+"""Preprocessing handler: extracts relevant text and populates database."""
 import json
 import os
 import re
 from urllib.parse import unquote_plus
+
 import boto3
 
-# lightweight clients (respect endpoint env vars if set)
-s3 = boto3.client('s3', endpoint_url=os.environ.get('S3_ENDPOINT_URL'))
-dynamodb = boto3.resource('dynamodb', endpoint_url=os.environ.get('DYNAMODB_ENDPOINT_URL'))
-ssm = boto3.client('ssm', endpoint_url=os.environ.get('SSM_ENDPOINT_URL'))
+S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL")
+DYNAMODB_ENDPOINT_URL = os.environ.get("DYNAMODB_ENDPOINT_URL")
+PROCESSED_BUCKET = "processed-text"
+REVIEWS_TABLE = "reviews"
+USERS_TABLE = "users"
 
-def get_param(name):
-    try:
-        return ssm.get_parameter(Name=name)['Parameter']['Value']
-    except Exception:
-        # fallback to environment variable (simple, for local runs)
-        return os.environ.get(name.strip('/').upper(), '')
+s3 = boto3.client("s3", endpoint_url=S3_ENDPOINT_URL)
+dynamodb = boto3.resource("dynamodb", endpoint_url=DYNAMODB_ENDPOINT_URL)
 
 def simple_process(text):
     # lower, keep alnum and spaces, collapse whitespace
@@ -29,43 +23,43 @@ def simple_process(text):
     return text
 
 def handler(event, context):
-    print('preprocessing invoked')
-    rec = event['Records'][0]['s3']
-    bucket = rec['bucket']['name']
-    key = unquote_plus(rec['object']['key'])
+    records = (event or {}).get("Records", [])
+    if not records:
+        return {"statusCode": 200, "body": json.dumps({"ok": True})}
 
-    obj = s3.get_object(Bucket=bucket, Key=key)
-    review = json.loads(obj['Body'].read().decode())
+    s3_record = records[0]["s3"]
+    bucket = s3_record["bucket"]["name"]
+    key = unquote_plus(s3_record["object"]["key"])
 
-    review_id = f"{review.get('reviewerID','unknown')}_{review.get('asin','')}"
-    user_id = review.get('reviewerID', 'unknown')
-
-    processed = simple_process(((review.get('summary') or '') + ' ' + (review.get('reviewText') or '')).strip())
-
-    processed_bucket = get_param('/buckets/processed')
+    review = json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read().decode())
+    review_id = f"{review.get('reviewerID', 'unknown')}_{review.get('asin', '')}"
+    user_id = review.get("reviewerID", "unknown")
+    processed_text = simple_process(f"{review.get('summary') or ''} {review.get('reviewText') or ''}")
     processed_key = f"processed/{review_id}.json"
-    processed_payload = {
-        'review_id': review_id,
-        'user_id': user_id,
-        'overall': review.get('overall'),
-        'processed_text': processed,
-    }
-    s3.put_object(Bucket=processed_bucket, Key=processed_key, Body=json.dumps(processed_payload))
 
-    # write minimal records to DynamoDB
-    reviews_table = dynamodb.Table(get_param('/tables/reviews') or 'reviews')
-    users_table = dynamodb.Table(get_param('/tables/users') or 'users')
+    s3.put_object(
+        Bucket=PROCESSED_BUCKET,
+        Key=processed_key,
+        Body=json.dumps({
+            "review_id": review_id,
+            "user_id": user_id,
+            "overall": review.get("overall"),
+            "processed_text": processed_text,
+        }),
+    )
 
-    users_table.update_item(Key={'user_id': user_id}, UpdateExpression='SET banned = if_not_exists(banned, :b)', ExpressionAttributeValues={':b': False})
-
-    reviews_table.put_item(Item={
-        'review_id': review_id,
-        'user_id': user_id,
-        'processed_text_key': processed_key,
-        'sentiment': None
+    dynamodb.Table(REVIEWS_TABLE).put_item(Item={
+        "review_id": review_id,
+        "user_id": user_id,
+        "processed_text_key": processed_key,
+        "sentiment": None,
     })
+    dynamodb.Table(USERS_TABLE).update_item(
+        Key={"user_id": user_id},
+        UpdateExpression="SET banned = if_not_exists(banned, :b)",
+        ExpressionAttributeValues={":b": False},
+    )
 
-
-    return {'statusCode': 200, 'body': json.dumps({'review_id': review_id})}
+    return {"statusCode": 200, "body": json.dumps({"review_id": review_id})}
 
 
