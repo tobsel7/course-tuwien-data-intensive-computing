@@ -6,6 +6,7 @@ upload review -> preprocessing -> sentiment/profanity -> violation handling.
 import json
 import os
 import time
+from pathlib import Path
 
 import boto3
 
@@ -36,6 +37,25 @@ def wait_for_lambda(function_name, timeout=30):
     """Wait for a Lambda function to become active."""
     waiter = lambda_client.get_waiter('function_active')
     waiter.wait(FunctionName=function_name)
+
+
+def test_reviews_devset_user_exists():
+    """Upload the devset fixture and assert that a known user is created."""
+    input_bucket = get_ssm_parameter('/buckets/input')
+    users_table = dynamodb.Table(get_ssm_parameter('/tables/users'))
+
+    reviews_path = Path(__file__).resolve().parents[2] / 'data' / 'reviews_devset.json'
+    with reviews_path.open('rb') as f:
+        s3_client.put_object(
+            Bucket=input_bucket,
+            Key='reviews_devset.json',
+            Body=f.read(),
+        )
+
+    time.sleep(4)
+
+    user_resp = users_table.get_item(Key={'user_id': 'A2VNYWOPJ13AFP'}, ConsistentRead=True)
+    assert 'Item' in user_resp
 
 
 def test_whole_flow():
@@ -103,5 +123,6 @@ if __name__ == '__main__':
     wait_for_lambda('sentiment_analysis')
     wait_for_lambda('profanity_check')
     wait_for_lambda('profanity_violation')
+    test_reviews_devset_user_exists()
     test_whole_flow()
     print("Test completed.")
