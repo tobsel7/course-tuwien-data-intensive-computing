@@ -16,6 +16,7 @@ $AWS dynamodb create-table --table-name users --attribute-definitions AttributeN
 $AWS dynamodb create-table --table-name profanity --attribute-definitions AttributeName=violation_id,AttributeType=S --key-schema AttributeName=violation_id,KeyType=HASH --billing-mode PAY_PER_REQUEST || true
 
 echo "Storing configuration in SSM..."
+$AWS ssm put-parameter --name /buckets/input --type String --value input-reviews --overwrite
 $AWS ssm put-parameter --name /buckets/processed --type String --value processed-text --overwrite
 $AWS ssm put-parameter --name /buckets/violations --type String --value profanity-violations --overwrite
 $AWS ssm put-parameter --name /tables/reviews --type String --value reviews --overwrite

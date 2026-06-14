@@ -72,6 +72,8 @@ def test_whole_flow():
 if __name__ == '__main__':
     print("Starting integration test...")
     wait_for_lambda('preprocessing')
+    wait_for_lambda('sentiment_analysis')
+    wait_for_lambda('profanity_check')
     wait_for_lambda('profanity_violation')
     test_whole_flow()
     print("Test completed.")
