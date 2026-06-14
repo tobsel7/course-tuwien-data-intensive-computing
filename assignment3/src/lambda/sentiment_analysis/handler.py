@@ -2,7 +2,6 @@
 Naive rule-based sentiment and update of reviews table.
 """
 
-import json
 import os
 import boto3
 
