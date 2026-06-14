@@ -13,6 +13,7 @@ AWS_ACCOUNT_ID="000000000000"
 # Resource names
 INPUT_BUCKET="assignment3-input-reviews"
 PROCESSED_BUCKET="assignment3-processed-text"
+VIOLATIONS_BUCKET="assignment3-profanity-violations"
 REVIEWS_TABLE="reviews"
 USERS_TABLE="users"
 PROFANITY_TABLE="profanity"
@@ -73,7 +74,7 @@ echo ""
 
 # Step 1: Create S3 buckets
 echo "========== Step 1: Creating S3 Buckets =========="
-for bucket in "${INPUT_BUCKET}" "${PROCESSED_BUCKET}"; do
+for bucket in "${INPUT_BUCKET}" "${PROCESSED_BUCKET}" "${VIOLATIONS_BUCKET}"; do
     if aws --endpoint-url="${MINISTACK_ENDPOINT}" s3 ls "s3://${bucket}" 2>/dev/null; then
         echo "✓ Bucket s3://${bucket} already exists"
     else
@@ -157,6 +158,7 @@ put_parameter() {
 
 put_parameter "/buckets/input" "${INPUT_BUCKET}"
 put_parameter "/buckets/processed" "${PROCESSED_BUCKET}"
+put_parameter "/buckets/violations" "${VIOLATIONS_BUCKET}"
 put_parameter "/tables/reviews" "${REVIEWS_TABLE}"
 put_parameter "/tables/users" "${USERS_TABLE}"
 put_parameter "/tables/profanity" "${PROFANITY_TABLE}"
@@ -241,47 +243,78 @@ deploy_lambda "profanity_violation"
 
 echo ""
 
-# Step 5: Create S3 bucket notification for preprocessing Lambda
+# Step 5: Create S3 bucket notifications
 echo "========== Step 5: Setting Up S3 Bucket Notifications =========="
 
-# Get ARN of preprocessing Lambda
 PREPROCESSING_ARN=$(aws --endpoint-url="${MINISTACK_ENDPOINT}" lambda get-function --function-name preprocessing --query 'Configuration.FunctionArn' --output text)
-echo "Preprocessing Lambda ARN: ${PREPROCESSING_ARN}"
+SENTIMENT_ARN=$(aws --endpoint-url="${MINISTACK_ENDPOINT}" lambda get-function --function-name sentiment_analysis --query 'Configuration.FunctionArn' --output text)
+PROFANITY_CHECK_ARN=$(aws --endpoint-url="${MINISTACK_ENDPOINT}" lambda get-function --function-name profanity_check --query 'Configuration.FunctionArn' --output text)
+VIOLATION_ARN=$(aws --endpoint-url="${MINISTACK_ENDPOINT}" lambda get-function --function-name profanity_violation --query 'Configuration.FunctionArn' --output text)
 
-# Create bucket notification configuration
-NOTIFICATION_CONFIG=$(cat <<EOF
+echo "Preprocessing Lambda ARN: ${PREPROCESSING_ARN}"
+echo "Sentiment Lambda ARN: ${SENTIMENT_ARN}"
+echo "Profanity Check Lambda ARN: ${PROFANITY_CHECK_ARN}"
+echo "Violation Lambda ARN: ${VIOLATION_ARN}"
+
+echo "Attaching input bucket notification..."
+aws --endpoint-url="${MINISTACK_ENDPOINT}" s3api put-bucket-notification-configuration \
+    --bucket "${INPUT_BUCKET}" \
+    --notification-configuration "$(cat <<EOF
 {
-  "LambdaFunctionConfigurations": [
+  \"LambdaFunctionConfigurations\": [
     {
-      "LambdaFunctionArn": "${PREPROCESSING_ARN}",
-      "Events": ["s3:ObjectCreated:*"],
-      "Filter": {
-        "Key": {
-          "FilterRules": [
-            {
-              "Name": "prefix",
-              "Value": "reviews/"
-            }
-          ]
-        }
-      }
+      \"LambdaFunctionArn\": \"${PREPROCESSING_ARN}\",
+      \"Events\": [\"s3:ObjectCreated:*\"],
+      \"Filter\": {\"Key\": {\"FilterRules\": [{\"Name\": \"prefix\", \"Value\": \"reviews/\"}]}}
     }
   ]
 }
 EOF
-)
+)" 2>/dev/null || echo "⚠ Input bucket notification may have issues, continuing..."
 
-echo "Attaching S3 bucket notification..."
+echo "Attaching processed bucket notification..."
 aws --endpoint-url="${MINISTACK_ENDPOINT}" s3api put-bucket-notification-configuration \
-    --bucket "${INPUT_BUCKET}" \
-    --notification-configuration "${NOTIFICATION_CONFIG}" 2>/dev/null || echo "⚠ Notification configuration may have issues, continuing..."
+    --bucket "${PROCESSED_BUCKET}" \
+    --notification-configuration "$(cat <<EOF
+{
+  \"LambdaFunctionConfigurations\": [
+    {
+      \"LambdaFunctionArn\": \"${SENTIMENT_ARN}\",
+      \"Events\": [\"s3:ObjectCreated:*\"],
+      \"Filter\": {\"Key\": {\"FilterRules\": [{\"Name\": \"prefix\", \"Value\": \"processed/\"}]}}
+    },
+    {
+      \"LambdaFunctionArn\": \"${PROFANITY_CHECK_ARN}\",
+      \"Events\": [\"s3:ObjectCreated:*\"],
+      \"Filter\": {\"Key\": {\"FilterRules\": [{\"Name\": \"prefix\", \"Value\": \"processed/\"}]}}
+    }
+  ]
+}
+EOF
+)" 2>/dev/null || echo "⚠ Processed bucket notification may have issues, continuing..."
 
-echo "✓ S3 bucket notification configured"
+echo "Attaching violations bucket notification..."
+aws --endpoint-url="${MINISTACK_ENDPOINT}" s3api put-bucket-notification-configuration \
+    --bucket "${VIOLATIONS_BUCKET}" \
+    --notification-configuration "$(cat <<EOF
+{
+  \"LambdaFunctionConfigurations\": [
+    {
+      \"LambdaFunctionArn\": \"${VIOLATION_ARN}\",
+      \"Events\": [\"s3:ObjectCreated:*\"],
+      \"Filter\": {\"Key\": {\"FilterRules\": [{\"Name\": \"prefix\", \"Value\": \"violations/\"}]}}
+    }
+  ]
+}
+EOF
+)" 2>/dev/null || echo "⚠ Violations bucket notification may have issues, continuing..."
+
+echo "✓ S3 bucket notifications configured"
 echo ""
 
-# Step 6: Downstream chaining
-echo "========== Step 6: Downstream Lambda Chaining =========="
-echo "⚠ Note: This local setup chains preprocessing -> analysis -> violation handling synchronously to avoid relying on DynamoDB Streams in MiniStack"
+# Step 6: S3-only downstream flow
+echo "========== Step 6: S3-only Downstream Flow =========="
+echo "✓ Preprocessing, sentiment analysis, profanity check, and violation handling are all triggered by S3 events"
 echo ""
 
 # Step 7: Run Integration Tests
@@ -314,7 +347,7 @@ fi
 
 echo ""
 echo "Deployment complete! Resources created:"
-echo "  S3 Buckets: ${INPUT_BUCKET}, ${PROCESSED_BUCKET}"
+echo "  S3 Buckets: ${INPUT_BUCKET}, ${PROCESSED_BUCKET}, ${VIOLATIONS_BUCKET}"
 echo "  DynamoDB Tables: ${REVIEWS_TABLE}, ${USERS_TABLE}, ${PROFANITY_TABLE}, ${SENTIMENT_ANALYSIS_TABLE}"
 echo "  Lambda Functions: preprocessing, sentiment_analysis, profanity_check, profanity_violation"
 echo ""

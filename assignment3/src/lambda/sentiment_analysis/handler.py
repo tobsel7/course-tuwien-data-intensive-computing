@@ -2,8 +2,10 @@
 Naive rule-based sentiment and update of reviews table.
 """
 
+import json
 import os
 import boto3
+from urllib.parse import unquote_plus
 
 s3 = boto3.client('s3', endpoint_url=os.environ.get('S3_ENDPOINT_URL'))
 dynamodb = boto3.resource('dynamodb', endpoint_url=os.environ.get('DYNAMODB_ENDPOINT_URL'))
@@ -30,29 +32,21 @@ def simple_sentiment(text):
 def handler(event, context):
     print('sentiment invoked')
     reviews_table = dynamodb.Table(get_param('/tables/reviews') or 'reviews')
-    processed_bucket = get_param('/buckets/processed')
 
     for r in event.get('Records', []):
-        # expect stream record with keys
-        keys = r.get('dynamodb', {}).get('Keys', {})
-        review_id = keys.get('review_id', {}).get('S') if keys else None
+        rec = r.get('s3', {})
+        bucket = rec.get('bucket', {}).get('name')
+        key = unquote_plus(rec.get('object', {}).get('key', ''))
+        if not bucket or not key:
+            continue
+
+        payload = json.loads(s3.get_object(Bucket=bucket, Key=key)['Body'].read().decode())
+        review_id = payload.get('review_id')
+        processed_text = payload.get('processed_text', '')
         if not review_id:
             continue
 
-        item = reviews_table.get_item(Key={'review_id': review_id}, ConsistentRead=True).get('Item')
-        if not item:
-            continue
-        pkey = item.get('processed_text_key')
-        if not pkey:
-            continue
-
-        bucket = processed_bucket or os.environ.get('DEFAULT_S3_BUCKET')
-        try:
-            txt = s3.get_object(Bucket=bucket, Key=pkey)['Body'].read().decode()
-        except Exception:
-            continue
-
-        sentiment = simple_sentiment(txt)
+        sentiment = simple_sentiment(processed_text)
         reviews_table.update_item(Key={'review_id': review_id}, UpdateExpression='SET sentiment = :s', ExpressionAttributeValues={':s': sentiment})
 
     return {'statusCode': 200}
