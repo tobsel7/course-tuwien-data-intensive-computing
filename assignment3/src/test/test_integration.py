@@ -39,34 +39,63 @@ def wait_for_lambda(function_name, timeout=30):
 
 
 def test_whole_flow():
-    """Test the complete flow: upload review -> preprocessing -> sentiment/profanity -> violation handling."""
+    """Test full flow with one uploaded file containing three reviews for one user."""
     input_bucket = get_ssm_parameter('/buckets/input')
     reviews_table = dynamodb.Table(get_ssm_parameter('/tables/reviews'))
     profanity_table = dynamodb.Table(get_ssm_parameter('/tables/profanity'))
+    users_table = dynamodb.Table(get_ssm_parameter('/tables/users'))
 
-    review = {
-        'reviewerID': 'test_user_1',
-        'reviewerName': 'Test User',
-        'asin': 'B001234567',
-        'overall': 1,
-        'summary': 'Bad',
-        'reviewText': 'damn, bad',
-    }
-    review_id = f"{review['reviewerID']}_{review['asin']}"
+    user_id = 'test_user_1'
+    reviews = [
+        {
+            'reviewerID': user_id,
+            'reviewerName': 'Test User',
+            'asin': 'B001234567',
+            'overall': 1,
+            'summary': 'Bad',
+            'reviewText': 'damn, bad',
+        },
+        {
+            'reviewerID': user_id,
+            'reviewerName': 'Test User',
+            'asin': 'B001234568',
+            'overall': 1,
+            'summary': 'Bad',
+            'reviewText': 'damn, bad',
+        },
+        {
+            'reviewerID': user_id,
+            'reviewerName': 'Test User',
+            'asin': 'B001234569',
+            'overall': 1,
+            'summary': 'Bad',
+            'reviewText': 'damn, bad',
+        },
+    ]
+
+    # Upload one JSONL object containing multiple reviews.
+    payload = '\n'.join(json.dumps(review) for review in reviews)
 
     s3_client.put_object(
         Bucket=input_bucket,
-        Key=f"reviews/{review_id}.json",
-        Body=json.dumps(review),
+        Key='reviews/test_user_1_batch.jsonl',
+        Body=payload,
     )
 
-    time.sleep(2)
+    time.sleep(4)
 
-    review_resp = reviews_table.get_item(Key={'review_id': review_id}, ConsistentRead=True)
-    assert 'Item' in review_resp
+    for review in reviews:
+        review_id = f"{review['reviewerID']}_{review['asin']}"
 
-    violation_resp = profanity_table.get_item(Key={'violation_id': review_id}, ConsistentRead=True)
-    assert 'Item' in violation_resp
+        review_resp = reviews_table.get_item(Key={'review_id': review_id}, ConsistentRead=True)
+        assert 'Item' in review_resp
+
+        violation_resp = profanity_table.get_item(Key={'violation_id': review_id}, ConsistentRead=True)
+        assert 'Item' in violation_resp
+
+    user_resp = users_table.get_item(Key={'user_id': user_id}, ConsistentRead=True)
+    assert 'Item' in user_resp
+    assert user_resp['Item'].get('banned') is True
 
 
 if __name__ == '__main__':
