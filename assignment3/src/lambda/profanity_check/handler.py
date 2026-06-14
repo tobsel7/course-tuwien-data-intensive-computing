@@ -9,13 +9,15 @@ s3 = boto3.client("s3", endpoint_url=endpoint)
 dynamodb = boto3.resource("dynamodb", endpoint_url=endpoint)
 ssm = boto3.client("ssm", endpoint_url=endpoint)
 
+PROFANE_WORD = "damn"
+
 def handler(event, context):
     for record in event.get("Records", []):
         bucket = record["s3"]["bucket"]["name"]
         key = unquote_plus(record["s3"]["object"]["key"])
 
         payload = json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read().decode())
-        if "damn" in payload["processed_text"]:
+        if PROFANE_WORD in payload["processed_text"]:
             violation = {"violation_id": payload["review_id"], "user_id": payload["user_id"]}
 
             table_name = ssm.get_parameter(Name="/tables/profanity")["Parameter"]["Value"]
