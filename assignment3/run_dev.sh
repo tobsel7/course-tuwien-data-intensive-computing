@@ -7,7 +7,6 @@ export AWS_DEFAULT_REGION=us-east-1
 ENDPOINT="http://localhost:4566"
 AWS="aws --endpoint-url=$ENDPOINT"
 ROLE="arn:aws:iam::000000000000:role/lambda-role"
-LAMBDA_TIMEOUT=900
 
 echo "Creating S3 buckets..."
 $AWS s3 mb s3://input-reviews || true
@@ -32,9 +31,9 @@ deploy_lambda() {
     DIR="src/lambda/$NAME"
     echo "Deploying $NAME..."
     (cd "$DIR" && rm -f lambda.zip && zip -q lambda.zip handler.py)
-    $AWS lambda create-function --function-name "$NAME" --runtime python3.11 --role "$ROLE" --handler handler.handler --timeout "$LAMBDA_TIMEOUT" --zip-file "fileb://$DIR/lambda.zip" --environment "Variables={ENDPOINT=$ENDPOINT,STAGE=local}" || \
+    $AWS lambda create-function --function-name "$NAME" --runtime python3.11 --role "$ROLE" --handler handler.handler --zip-file "fileb://$DIR/lambda.zip" --environment "Variables={ENDPOINT=$ENDPOINT,STAGE=local}" || \
     $AWS lambda update-function-code --function-name "$NAME" --zip-file "fileb://$DIR/lambda.zip"
-    $AWS lambda update-function-configuration --function-name "$NAME" --timeout "$LAMBDA_TIMEOUT" --environment "Variables={ENDPOINT=$ENDPOINT,STAGE=local}"
+    $AWS lambda update-function-configuration --function-name "$NAME" --environment "Variables={ENDPOINT=$ENDPOINT,STAGE=local}"
 }
 
 deploy_lambda preprocessing
