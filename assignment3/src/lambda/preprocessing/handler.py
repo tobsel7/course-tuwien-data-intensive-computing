@@ -6,6 +6,7 @@ writes it to a processed bucket and records entries in DynamoDB.
 import json
 import os
 import re
+from urllib.parse import unquote_plus
 import boto3
 
 # lightweight clients (respect endpoint env vars if set)
@@ -54,10 +55,8 @@ def invoke_downstream(function_name, review_id, user_id, processed_key):
 
 def handler(event, context):
     print('preprocessing invoked')
-    # event from S3: read first record
-    rec = event['Records'][0]['s3']
-    bucket = rec['bucket']['name']
-    key = rec['object']['key']
+    bucket = event['bucket']['name']
+    key = unquote_plus(event['object']['key'])
 
     obj = s3.get_object(Bucket=bucket, Key=key)
     review = json.loads(obj['Body'].read().decode())
