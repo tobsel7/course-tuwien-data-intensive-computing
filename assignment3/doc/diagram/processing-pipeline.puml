@@ -1,0 +1,44 @@
+@startuml Review Processing Pipeline
+!include <aws/common>
+!include <aws/Storage/AmazonS3/AmazonS3>
+!include <aws/Compute/AWSLambda/AWSLambda>
+!include <aws/Database/AmazonDynamoDB/AmazonDynamoDB>
+left to right direction
+
+' S3 Buckets
+component "<color:#42B246><$AmazonS3></color>\ninput-reviews" as B_Input #White
+component "<color:#42B246><$AmazonS3></color>\nprocessed-text" as B_Processed #White
+component "<color:#42B246><$AmazonS3></color>\nprofanity-violations" as B_Violations #White
+
+' Lambda Functions
+component "<color:#D11818><$AWSLambda></color>\npreprocessing" as L_Pre #White
+component "<color:#D11818><$AWSLambda></color>\nsentiment_analysis" as L_Sent #White
+component "<color:#D11818><$AWSLambda></color>\nprofanity_check" as L_Prof #White
+component "<color:#D11818><$AWSLambda></color>\nprofanity_violation" as L_Viol #White
+
+' DynamoDB Tables
+rectangle "DynamoDB" as R_Tables #LightBlue {
+    component "<color:#2C5BB7><$AmazonDynamoDB></color>\nreviews" as T_Reviews #White
+    component "<color:#2C5BB7><$AmazonDynamoDB></color>\nusers" as T_Users #White
+    component "<color:#2C5BB7><$AmazonDynamoDB></color>\nprofanity" as T_Prof #White
+}
+
+' Data Flows & Triggers
+B_Input --> L_Pre : "trigger"
+L_Pre --> B_Processed : "save text"
+L_Pre --> T_Reviews : "save review"
+L_Pre --> T_Users : "save user"
+
+B_Processed --> L_Sent : "trigger"
+B_Processed --> L_Prof : "trigger"
+
+L_Sent --> T_Reviews : "update sentiment"
+
+L_Prof --> B_Violations : "save profane review"
+
+B_Violations --> L_Viol : "trigger"
+L_Viol --> T_Prof : "add violation"
+L_Viol --> T_Users : "ban users"
+
+R_Tables -[hidden]right-> B_Processed
+@enduml
