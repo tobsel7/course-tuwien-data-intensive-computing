@@ -6,6 +6,7 @@ upload review -> preprocessing -> sentiment/profanity -> violation handling
 import json
 import os
 import time
+import uuid
 from pathlib import Path
 
 import boto3
@@ -39,21 +40,29 @@ def wait_for_lambda(function_name, timeout=30):
     waiter.wait(FunctionName=function_name)
 
 
+def upload_review_file(bucket, review_json: str, prefix: str = "reviews"):
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=f"{prefix}/{uuid.uuid4().hex}.json",
+        Body=review_json.encode('utf-8'),
+    )
+
+
 def test_reviews_devset():
-    """Smoke test: upload devset fixture. On the cluster one can verify the log output."""
+    """Smoke test: upload devset fixture line by line with random object names."""
     input_bucket = get_ssm_parameter('/buckets/input')
 
     reviews_path = Path(__file__).resolve().parents[2] / 'data' / 'reviews_devset_reduced.json'
-    with reviews_path.open('rb') as f:
-        put_resp = s3_client.put_object(
-            Bucket=input_bucket,
-            Key='reviews_devset.json',
-            Body=f.read(),
-        )
+    with reviews_path.open('r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            upload_review_file(input_bucket, line)
 
 
 def test_whole_flow():
-    """Test full flow with one uploaded file containing three reviews for one user."""
+    """Test full flow with four uploaded files for one user."""
     input_bucket = get_ssm_parameter('/buckets/input')
     reviews_table = dynamodb.Table(get_ssm_parameter('/tables/reviews'))
     profanity_table = dynamodb.Table(get_ssm_parameter('/tables/profanity'))
@@ -95,13 +104,8 @@ def test_whole_flow():
         },
     ]
 
-    payload = '\n'.join(json.dumps(review) for review in reviews)
-
-    s3_client.put_object(
-        Bucket=input_bucket,
-        Key='reviews/test_user_1_batch.json',
-        Body=payload,
-    )
+    for review in reviews:
+        upload_review_file(input_bucket, json.dumps(review))
 
     time.sleep(4)
 
