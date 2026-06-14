@@ -204,7 +204,7 @@ deploy_lambda() {
 
     # Check if function exists
     ENV_VARS=$(cat <<EOF
-{"Variables":{"STAGE":"local","S3_ENDPOINT_URL":"${S3_ENDPOINT_URL}","DYNAMODB_ENDPOINT_URL":"${DYNAMODB_ENDPOINT_URL}","SSM_ENDPOINT_URL":"${SSM_ENDPOINT_URL}"}}
+{"Variables":{"STAGE":"local","MINISTACK_ENDPOINT":"${MINISTACK_ENDPOINT}","S3_ENDPOINT_URL":"${S3_ENDPOINT_URL}","DYNAMODB_ENDPOINT_URL":"${DYNAMODB_ENDPOINT_URL}","SSM_ENDPOINT_URL":"${SSM_ENDPOINT_URL}"}}
 EOF
 )
 
@@ -279,9 +279,9 @@ aws --endpoint-url="${MINISTACK_ENDPOINT}" s3api put-bucket-notification-configu
 echo "✓ S3 bucket notification configured"
 echo ""
 
-# Step 6: Enable DynamoDB Streams and create Lambda triggers
-echo "========== Step 6: Setting Up DynamoDB Stream Triggers =========="
-echo "⚠ Note: DynamoDB stream triggers in MiniStack are emulated; manual invocation may be needed for testing"
+# Step 6: Downstream chaining
+echo "========== Step 6: Downstream Lambda Chaining =========="
+echo "⚠ Note: This local setup chains preprocessing -> analysis -> violation handling synchronously to avoid relying on DynamoDB Streams in MiniStack"
 echo ""
 
 # Step 7: Run Integration Tests

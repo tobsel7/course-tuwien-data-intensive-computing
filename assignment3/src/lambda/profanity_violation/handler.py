@@ -44,7 +44,7 @@ def handler(event, context):
 
 	for uid in users:
 		# small-scale scan to count violations for the user
-		resp = profanity_table.scan(FilterExpression=Attr('user_id').eq(uid))
+		resp = profanity_table.scan(FilterExpression=Attr('user_id').eq(uid), ConsistentRead=True)
 		count = resp.get('Count', 0)
 		if count > VIOLATION_THRESHOLD:
 			users_table.update_item(

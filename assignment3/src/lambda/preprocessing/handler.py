@@ -12,6 +12,7 @@ import boto3
 s3 = boto3.client('s3', endpoint_url=os.environ.get('S3_ENDPOINT_URL'))
 dynamodb = boto3.resource('dynamodb', endpoint_url=os.environ.get('DYNAMODB_ENDPOINT_URL'))
 ssm = boto3.client('ssm', endpoint_url=os.environ.get('SSM_ENDPOINT_URL'))
+lambda_client = boto3.client('lambda', endpoint_url=os.environ.get('MINISTACK_ENDPOINT'))
 
 def get_param(name):
     try:
@@ -27,6 +28,30 @@ def simple_process(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
+def invoke_downstream(function_name, review_id, user_id, processed_key):
+    event = {
+        'Records': [{
+            'eventName': 'INSERT',
+            'eventSource': 'aws:dynamodb',
+            'dynamodb': {
+                'Keys': {'review_id': {'S': review_id}},
+                'NewImage': {
+                    'review_id': {'S': review_id},
+                    'user_id': {'S': user_id},
+                    'processed_text_key': {'S': processed_key},
+                    'sentiment': {'NULL': True},
+                },
+            },
+        }]
+    }
+    resp = lambda_client.invoke(
+        FunctionName=function_name,
+        InvocationType='RequestResponse',
+        Payload=json.dumps(event).encode('utf-8'),
+    )
+    if resp.get('FunctionError'):
+        raise RuntimeError(f"{function_name} failed: {resp['FunctionError']}")
+
 def handler(event, context):
     print('preprocessing invoked')
     # event from S3: read first record
@@ -37,10 +62,10 @@ def handler(event, context):
     obj = s3.get_object(Bucket=bucket, Key=key)
     review = json.loads(obj['Body'].read().decode())
 
-    review_id = f"{review.get('reviewerID','unknown')}_{review.get('asin','') }"
+    review_id = f"{review.get('reviewerID','unknown')}_{review.get('asin','')}"
     user_id = review.get('reviewerID', 'unknown')
 
-    processed = simple_process((review.get('summary','') + ' ' + review.get('reviewText','')).strip())
+    processed = simple_process(((review.get('summary') or '') + ' ' + (review.get('reviewText') or '')).strip())
 
     processed_bucket = get_param('/buckets/processed') or bucket
     processed_key = f"processed/{review_id}.txt"
@@ -58,6 +83,9 @@ def handler(event, context):
         'processed_text_key': processed_key,
         'sentiment': None
     })
+
+    invoke_downstream('sentiment_analysis', review_id, user_id, processed_key)
+    invoke_downstream('profanity_check', review_id, user_id, processed_key)
 
     return {'statusCode': 200, 'body': json.dumps({'review_id': review_id})}
 

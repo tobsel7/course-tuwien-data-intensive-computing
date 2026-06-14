@@ -9,6 +9,7 @@ import boto3
 s3 = boto3.client('s3', endpoint_url=os.environ.get('S3_ENDPOINT_URL'))
 dynamodb = boto3.resource('dynamodb', endpoint_url=os.environ.get('DYNAMODB_ENDPOINT_URL'))
 ssm = boto3.client('ssm', endpoint_url=os.environ.get('SSM_ENDPOINT_URL'))
+lambda_client = boto3.client('lambda', endpoint_url=os.environ.get('MINISTACK_ENDPOINT'))
 
 BAD = {'damn', 'crap', 'sucks', 'hate', 'shit', 'fuck'}
 
@@ -30,7 +31,7 @@ def handler(event, context):
         if not review_id:
             continue
 
-        item = reviews_table.get_item(Key={'review_id': review_id}).get('Item')
+        item = reviews_table.get_item(Key={'review_id': review_id}, ConsistentRead=True).get('Item')
         if not item:
             continue
 
@@ -49,6 +50,26 @@ def handler(event, context):
             continue
 
         profanity_table.put_item(Item={'violation_id': f"{review_id}", 'review_id': review_id, 'user_id': item.get('user_id', ''), 'words': ','.join(found)})
+
+        violation_event = {
+            'Records': [{
+                'eventName': 'INSERT',
+                'eventSource': 'aws:dynamodb',
+                'dynamodb': {
+                    'NewImage': {
+                        'review_id': {'S': review_id},
+                        'user_id': {'S': item.get('user_id', '')},
+                    },
+                },
+            }]
+        }
+        resp = lambda_client.invoke(
+            FunctionName='profanity_violation',
+            InvocationType='RequestResponse',
+            Payload=json.dumps(violation_event).encode('utf-8'),
+        )
+        if resp.get('FunctionError'):
+            raise RuntimeError(f"profanity_violation failed: {resp['FunctionError']}")
 
     return {'statusCode': 200}
 

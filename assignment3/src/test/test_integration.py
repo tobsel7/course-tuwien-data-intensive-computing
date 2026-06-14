@@ -9,6 +9,7 @@ import sys
 import time
 import boto3
 from pathlib import Path
+from boto3.dynamodb.conditions import Attr
 
 # Get configuration from environment
 MINISTACK_ENDPOINT = os.environ.get('MINISTACK_ENDPOINT', 'http://localhost:4566')
@@ -48,7 +49,7 @@ def test_preprocessing_flow():
     s3_client.put_object(Bucket=input_bucket, Key=f"reviews/{review_id}.json", Body=json.dumps(test_review))
     time.sleep(2)
 
-    resp = reviews_table.get_item(Key={'review_id': review_id})
+    resp = reviews_table.get_item(Key={'review_id': review_id}, ConsistentRead=True)
     assert 'Item' in resp
     item = resp['Item']
     assert item['user_id'] == test_review['reviewerID']
@@ -58,12 +59,12 @@ def test_preprocessing_flow():
 def test_sentiment_analysis_flow(review_id, user_id):
     reviews_table = dynamodb.Table(get_ssm_parameter('/tables/reviews'))
     time.sleep(2)
-    resp = reviews_table.get_item(Key={'review_id': review_id})
+    resp = reviews_table.get_item(Key={'review_id': review_id}, ConsistentRead=True)
     assert 'Item' in resp and resp['Item'].get('sentiment') is not None
 
 def test_profanity_check_flow(review_id, user_id):
     profanity_table = dynamodb.Table(get_ssm_parameter('/tables/profanity'))
-    resp = profanity_table.scan(FilterExpression='user_id = :u', ExpressionAttributeValues={':u': user_id})
+    resp = profanity_table.scan(FilterExpression=Attr('user_id').eq(user_id))
     assert resp.get('Count', 0) == 0
 
 def test_profanity_violation_with_bad_review():
@@ -75,8 +76,8 @@ def test_profanity_violation_with_bad_review():
     s3_client.put_object(Bucket=input_bucket, Key=f"reviews/{review_id}.json", Body=json.dumps(test_review))
     time.sleep(2)
 
-    resp = profanity_table.scan(FilterExpression='review_id = :r', ExpressionAttributeValues={':r': review_id})
-    assert resp.get('Count', 0) > 0
+    resp = profanity_table.get_item(Key={'violation_id': review_id}, ConsistentRead=True)
+    assert 'Item' in resp
     return test_review['reviewerID']
 
 def test_user_banning():
@@ -89,7 +90,7 @@ def test_user_banning():
         time.sleep(1)
 
     time.sleep(3)
-    resp = users_table.get_item(Key={'user_id': user_id})
+    resp = users_table.get_item(Key={'user_id': user_id}, ConsistentRead=True)
     assert 'Item' in resp and resp['Item'].get('banned', False) is True
 
 def test_data_import_from_devset():

@@ -40,7 +40,7 @@ def handler(event, context):
         if not review_id:
             continue
 
-        item = reviews_table.get_item(Key={'review_id': review_id}).get('Item')
+        item = reviews_table.get_item(Key={'review_id': review_id}, ConsistentRead=True).get('Item')
         if not item:
             continue
         pkey = item.get('processed_text_key')
