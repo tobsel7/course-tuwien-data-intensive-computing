@@ -43,7 +43,7 @@ def test_reviews_devset():
     """Smoke test: upload devset fixture. On the cluster one can verify the log output."""
     input_bucket = get_ssm_parameter('/buckets/input')
 
-    reviews_path = Path(__file__).resolve().parents[2] / 'data' / 'reviews_devset.json'
+    reviews_path = Path(__file__).resolve().parents[2] / 'data' / 'reviews_devset_reduced.json'
     with reviews_path.open('rb') as f:
         put_resp = s3_client.put_object(
             Bucket=input_bucket,
