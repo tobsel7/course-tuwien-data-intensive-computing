@@ -18,27 +18,15 @@ ssm = boto3.client("ssm", endpoint_url=endpoint)
 
 
 def parse_reviews_payload(raw_text):
-    """Parse one review, a JSON array, or JSONL content into a list of reviews."""
-    raw_text = raw_text.strip()
-    if not raw_text:
-        return []
-
-    try:
-        parsed = json.loads(raw_text)
-        if isinstance(parsed, list):
-            return parsed
-        if isinstance(parsed, dict):
-            return [parsed]
-    except json.JSONDecodeError:
-        pass
-
+    lines = [ln.strip() for ln in raw_text.splitlines() if ln.strip()]
     reviews = []
-    for line in raw_text.splitlines():
-        line = line.strip()
-        if line:
-            reviews.append(json.loads(line))
+    for line in lines:
+        reviews.append(json.loads(line))
     return reviews
 
+def preprocess_review_text(review):
+    # TODO: implement text normalization helping profanity check and sentiment analysis
+    return f"{review.get('summary', '')} {review.get('reviewText', '')}".lower().strip()
 
 def handler(event, context):
     processed_bucket = ssm.get_parameter(Name="/buckets/processed")["Parameter"]["Value"]
@@ -58,7 +46,7 @@ def handler(event, context):
         for review in reviews:
             user_id = review["reviewerID"]
             review_id = f"{user_id}_{review['asin']}"
-            processed_text = f"{review.get('summary', '')} {review.get('reviewText', '')}".lower().strip()
+            processed_text = preprocess_review_text(review)
 
             s3.put_object(
                 Bucket=processed_bucket,
@@ -72,7 +60,7 @@ def handler(event, context):
                 "sentiment": None
             })
 
-            # Keep existing ban status; only initialize user records if missing.
+            # create only if missing
             users_table.update_item(
                 Key={"user_id": user_id},
                 UpdateExpression="SET banned = if_not_exists(banned, :default)",

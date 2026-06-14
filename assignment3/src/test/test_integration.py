@@ -73,8 +73,8 @@ def test_whole_flow():
         },
     ]
 
-    # Upload one JSONL object containing multiple reviews.
-    payload = '\n'.join(json.dumps(review) for review in reviews)
+    # Upload one file containing concatenated JSON review objects (Amazon devset style)
+    payload = ''.join(json.dumps(review) for review in reviews)
 
     s3_client.put_object(
         Bucket=input_bucket,
