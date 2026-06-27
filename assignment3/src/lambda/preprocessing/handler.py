@@ -40,12 +40,6 @@ def handler(event, context):
         review_id = f"{user_id}_{review['asin']}"
         processed_text = preprocess_review_text(review)
 
-        s3.put_object(
-            Bucket=processed_bucket,
-            Key=f"processed/{review_id}.json",
-            Body=json.dumps({"review_id": review_id, "user_id": user_id, "processed_text": processed_text})
-        )
-
         reviews_table.put_item(Item={
             "review_id": review_id,
             "user_id": user_id,
@@ -57,5 +51,11 @@ def handler(event, context):
             Key={"user_id": user_id},
             UpdateExpression="SET banned = if_not_exists(banned, :default)",
             ExpressionAttributeValues={":default": False}
+        )
+
+        s3.put_object(
+            Bucket=processed_bucket,
+            Key=f"processed/{review_id}.json",
+            Body=json.dumps({"review_id": review_id, "user_id": user_id, "processed_text": processed_text})
         )
     return {"statusCode": 200}

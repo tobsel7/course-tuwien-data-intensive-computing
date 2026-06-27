@@ -29,11 +29,39 @@ $AWS ssm put-parameter --name /tables/profanity --type String --value profanity 
 deploy_lambda() {
     NAME=$1
     DIR="src/lambda/$NAME"
+
     echo "Deploying $NAME..."
-    (cd "$DIR" && rm -f lambda.zip && zip -q lambda.zip handler.py)
-    $AWS lambda create-function --function-name "$NAME" --runtime python3.11 --role "$ROLE" --handler handler.handler --zip-file "fileb://$DIR/lambda.zip" --environment "Variables={ENDPOINT=$ENDPOINT,STAGE=local}" || \
-    $AWS lambda update-function-code --function-name "$NAME" --zip-file "fileb://$DIR/lambda.zip"
-    $AWS lambda update-function-configuration --function-name "$NAME" --environment "Variables={ENDPOINT=$ENDPOINT,STAGE=local}"
+
+    rm -rf "$DIR/package"
+    rm -f "$DIR/lambda.zip"
+
+    mkdir -p "$DIR/package"
+
+    if [ -f "$DIR/requirements.txt" ]; then
+        pip3 install -r "$DIR/requirements.txt" -t "$DIR/package"
+    fi
+
+    cp "$DIR/handler.py" "$DIR/package/handler.py"
+
+    (
+        cd "$DIR/package"
+        zip -qr "../lambda.zip" .
+    )
+
+    $AWS lambda create-function \
+        --function-name "$NAME" \
+        --runtime python3.11 \
+        --role "$ROLE" \
+        --handler handler.handler \
+        --zip-file "fileb://$DIR/lambda.zip" \
+        --environment "Variables={ENDPOINT=$ENDPOINT,STAGE=local}" || \
+    $AWS lambda update-function-code \
+        --function-name "$NAME" \
+        --zip-file "fileb://$DIR/lambda.zip"
+
+    $AWS lambda update-function-configuration \
+        --function-name "$NAME" \
+        --environment "Variables={ENDPOINT=$ENDPOINT,STAGE=local}"
 }
 
 deploy_lambda preprocessing

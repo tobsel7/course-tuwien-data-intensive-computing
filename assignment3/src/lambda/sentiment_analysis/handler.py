@@ -6,19 +6,35 @@ It stores the sentiment in the reviews DynamoDB table.
 import json
 import os
 import boto3
+import nltk
 from urllib.parse import unquote_plus
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
 endpoint = os.environ.get("ENDPOINT")
 s3 = boto3.client("s3", endpoint_url=endpoint)
 dynamodb = boto3.resource("dynamodb", endpoint_url=endpoint)
 ssm = boto3.client("ssm", endpoint_url=endpoint)
 
+try:
+    nltk.data.find("sentiment/vader_lexicon.zip")
+except LookupError:
+    nltk.download("vader_lexicon", quiet=True)
+
+sentiment_analyzer = SentimentIntensityAnalyzer()
+
 def determine_review_sentiment(text):
-    # TODO: do a real sentiment analysis and not only look for the word "good" or "bad"
-    sentiment = "neutral"
-    if "good" in text: sentiment = "positive"
-    elif "bad" in text: sentiment = "negative"
-    return sentiment
+    if not text:
+        return "neutral"
+
+    scores = sentiment_analyzer.polarity_scores(str(text))
+    compound = scores["compound"]
+
+    if compound >= 0.05:
+        return "positive"
+    elif compound <= -0.05:
+        return "negative"
+    else:
+        return "neutral"
 
 def handler(event, context):
     for record in event.get("Records", []):

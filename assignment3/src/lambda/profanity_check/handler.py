@@ -7,15 +7,20 @@ import json
 import os
 import boto3
 from urllib.parse import unquote_plus
+from profanityfilter import ProfanityFilter
 
 endpoint = os.environ.get("ENDPOINT")
 s3 = boto3.client("s3", endpoint_url=endpoint)
 dynamodb = boto3.resource("dynamodb", endpoint_url=endpoint)
 ssm = boto3.client("ssm", endpoint_url=endpoint)
 
+profanity_filter = ProfanityFilter()
+
 def contains_profanity(text):
-    # TODO: do a real profanity check and not only look for the one word match
-    return "damn" in text
+    if not text:
+        return False
+
+    return profanity_filter.is_profane(str(text))
 
 def handler(event, context):
     for record in event.get("Records", []):

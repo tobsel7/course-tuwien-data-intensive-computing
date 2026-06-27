@@ -107,13 +107,14 @@ def test_whole_flow():
     for review in reviews:
         upload_review_file(input_bucket, json.dumps(review))
 
-    time.sleep(4)
+    time.sleep(20)
 
     for review in reviews:
         review_id = f"{review['reviewerID']}_{review['asin']}"
 
         review_resp = reviews_table.get_item(Key={'review_id': review_id}, ConsistentRead=True)
         assert 'Item' in review_resp
+        assert review_resp['Item'].get('sentiment') == 'negative'
 
         violation_resp = profanity_table.get_item(Key={'violation_id': review_id}, ConsistentRead=True)
         assert 'Item' in violation_resp
