@@ -3,6 +3,8 @@ set -e
 export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
 export AWS_DEFAULT_REGION=us-east-1
+export AWS_PAGER=""
+
 
 ENDPOINT="http://localhost:4566"
 AWS="aws --endpoint-url=$ENDPOINT"
@@ -42,6 +44,9 @@ deploy_lambda() {
     fi
 
     cp "$DIR/handler.py" "$DIR/package/handler.py"
+    if [ -d "$DIR/nltk_data" ]; then
+        cp -r "$DIR/nltk_data" "$DIR/package/nltk_data"
+    fi
 
     (
         cd "$DIR/package"

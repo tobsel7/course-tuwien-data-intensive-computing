@@ -8,7 +8,12 @@ It:
 
 import json
 import os
+import string
 import boto3
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
 from urllib.parse import unquote_plus
 
 endpoint = os.environ.get("ENDPOINT")
@@ -16,10 +21,55 @@ s3 = boto3.client("s3", endpoint_url=endpoint)
 dynamodb = boto3.resource("dynamodb", endpoint_url=endpoint)
 ssm = boto3.client("ssm", endpoint_url=endpoint)
 
+# Ensure NLTK resources can be loaded locally from packaged directory
+nltk_data_path = os.path.join(os.path.dirname(__file__), "nltk_data")
+nltk.data.path.append(nltk_data_path)
+
+# Ensure NLTK resources are loaded/downloaded
+for resource in ["punkt", "punkt_tab", "stopwords", "wordnet", "omw-1.4"]:
+    try:
+        if resource == "punkt":
+            nltk.data.find("tokenizers/punkt")
+        elif resource == "punkt_tab":
+            nltk.data.find("tokenizers/punkt_tab")
+        else:
+            nltk.data.find(f"corpora/{resource}")
+    except LookupError:
+        # Fallback to downloading if not found locally
+        import ssl
+        try:
+            _create_unverified_https_context = ssl._create_unverified_context
+        except AttributeError:
+            pass
+        else:
+            ssl._create_default_https_context = _create_unverified_https_context
+        nltk.download(resource, quiet=True, download_dir=nltk_data_path)
+
+lemmatizer = WordNetLemmatizer()
+stop_words = set(stopwords.words("english"))
+
 
 def preprocess_review_text(review):
-    # TODO: implement text normalization helping profanity check and sentiment analysis
-    return f"{review.get('summary', '')} {review.get('reviewText', '')}".lower().strip()
+    # Combine summary and reviewText
+    text = f"{review.get('summary', '')} {review.get('reviewText', '')}".lower().strip()
+    
+    # Tokenization
+    tokens = word_tokenize(text)
+    
+    # Stop word removal and Lemmatization
+    cleaned_tokens = []
+    for token in tokens:
+        # Ignore punctuation
+        if token in string.punctuation:
+            continue
+        # Ignore stop words
+        if token in stop_words:
+            continue
+        # Lemmatize
+        cleaned_tokens.append(lemmatizer.lemmatize(token))
+        
+    return " ".join(cleaned_tokens)
+
 
 def handler(event, context):
     processed_bucket = ssm.get_parameter(Name="/buckets/processed")["Parameter"]["Value"]

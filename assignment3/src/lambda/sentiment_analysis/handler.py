@@ -15,10 +15,21 @@ s3 = boto3.client("s3", endpoint_url=endpoint)
 dynamodb = boto3.resource("dynamodb", endpoint_url=endpoint)
 ssm = boto3.client("ssm", endpoint_url=endpoint)
 
+# Ensure NLTK resources can be loaded locally from packaged directory
+nltk_data_path = os.path.join(os.path.dirname(__file__), "nltk_data")
+nltk.data.path.append(nltk_data_path)
+
 try:
     nltk.data.find("sentiment/vader_lexicon.zip")
 except LookupError:
-    nltk.download("vader_lexicon", quiet=True)
+    import ssl
+    try:
+        _create_unverified_https_context = ssl._create_unverified_context
+    except AttributeError:
+        pass
+    else:
+        ssl._create_default_https_context = _create_unverified_https_context
+    nltk.download("vader_lexicon", quiet=True, download_dir=nltk_data_path)
 
 sentiment_analyzer = SentimentIntensityAnalyzer()
 

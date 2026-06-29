@@ -1,0 +1,7 @@
+# Ignore Lambda build packages and zip archives
+src/lambda/*/package/
+src/lambda/**/*.zip
+
+# Ignore downloaded NLTK data
+src/lambda/*/nltk_data/
+
